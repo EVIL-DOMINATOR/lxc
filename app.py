@@ -23,9 +23,9 @@ os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/b
 
 # Configuration
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD_HASH = hashlib.sha256("admin123".encode()).hexdigest()  # Default password
+ADMIN_PASSWORD_HASH = hashlib.sha256("admin123".encode()).hexdigest()
 
-# LXC command paths (LXC 6.x uses separate binaries)
+# LXC command paths
 LXC_CMD = {
     "ls": "/usr/bin/lxc-ls",
     "info": "/usr/bin/lxc-info",
@@ -38,15 +38,6 @@ LXC_CMD = {
     "config": "/usr/bin/lxc-config",
     "execute": "/usr/bin/lxc-execute",
     "create": "/usr/bin/lxc-create",
-    "copy": "/usr/bin/lxc-copy",
-    "snapshot": "/usr/bin/lxc-snapshot",
-    "monitor": "/usr/bin/lxc-monitor",
-    "console": "/usr/bin/lxc-console",
-    "cgroup": "/usr/bin/lxc-cgroup",
-    "checkpoint": "/usr/bin/lxc-checkpoint",
-    "unshare": "/usr/bin/lxc-unshare",
-    "top": "/usr/bin/lxc-top",
-    "usernsrun": "/usr/bin/lxc-usernsexec",
 }
 
 def get_lxc_path(cmd_name):
@@ -79,30 +70,42 @@ def run_lxc_command(command):
 
 def get_all_containers():
     """Get list of all LXC containers"""
-    # Use lxc-ls to get container names
-    ls_result = run_lxc_command(f"{get_lxc_path('ls')} --list")
+    # Use lxc-ls to get container names (one per line)
+    ls_result = run_lxc_command(f"{get_lxc_path('ls')}")
     if not ls_result["success"]:
         return []
     
-    container_names = ls_result["output"].strip().split()
+    # Parse container names (space or newline separated)
+    output = ls_result["output"].strip()
+    if not output:
+        return []
+    
+    container_names = output.split()
     if not container_names:
         return []
     
     containers = []
     for name in container_names:
+        if not name:
+            continue
+            
         # Get state for each container
-        info_result = run_lxc_command(f"{get_lxc_path('info')} -s -n {name}")
+        info_result = run_lxc_command(f"{get_lxc_path('info')} -n {name}")
         state = "Stopped"
         if info_result["success"]:
-            state_output = info_result["output"].strip()
-            if "RUNNING" in state_output:
+            output_info = info_result["output"]
+            if "state: RUNNING" in output_info or "RUNNING" in output_info:
                 state = "Running"
-            elif "FROZEN" in state_output:
+            elif "state: FROZEN" in output_info or "FROZEN" in output_info:
                 state = "Frozen"
         
         # Get IP address
         ip_result = run_lxc_command(f"{get_lxc_path('info')} -i -n {name}")
-        ipv4 = ip_result["output"].strip() if ip_result["success"] else "N/A"
+        ipv4 = ip_result["output"].strip() if ip_result["success"] else ""
+        
+        # Get config
+        config_result = run_lxc_command(f"{get_lxc_path('config')} -n {name}")
+        config = {}
         
         containers.append({
             "name": name,
@@ -110,10 +113,10 @@ def get_all_containers():
             "image": "unknown",
             "network": {
                 "eth0": {
-                    "addresses": [{"address": ipv4}] if ipv4 and ipv4 != "N/A" else []
+                    "addresses": [{"address": ipv4}] if ipv4 else []
                 }
             },
-            "config": {}
+            "config": config
         })
     
     return containers
@@ -182,16 +185,27 @@ def api_create_container():
     if not name:
         return jsonify({"error": "Container name required"}), 400
     
-    # Create container using lxc-create with download template
-    # Format: lxc-create -t download -n <name> -- -d ubuntu -r jammy -a amd64
-    create_cmd = f"{get_lxc_path('create')} -t download -n {name} -- -d ubuntu -r jammy -a amd64"
+    # Map image to download parameters
+    image_map = {
+        'ubuntu:22.04': '-d ubuntu -r jammy -a amd64',
+        'ubuntu:20.04': '-d ubuntu -r focal -a amd64',
+        'debian:12': '-d debian -r bookworm -a amd64',
+        'debian:11': '-d debian -r bullseye -a amd64',
+        'almalinux:9': '-d almalinux -r 9 -a amd64',
+        'centos:7': '-d centos -r 7 -a amd64',
+    }
+    
+    download_args = image_map.get(image, '-d debian -r bookworm -a amd64')
+    
+    # Create container
+    create_cmd = f"{get_lxc_path('create')} -t download -n {name} -- {download_args}"
     result = run_lxc_command(create_cmd)
     
-    if result["success"] or "already exists" in result["error"].lower():
+    if result["success"]:
         # Set CPU limits
         run_lxc_command(f"{get_lxc_path('config')} -n {name} lxc.cgroup2.cpu.max {cpu} 100000")
         
-        # Set memory limits
+        # Set memory limits  
         run_lxc_command(f"{get_lxc_path('config')} -n {name} lxc.cgroup2.memory.max {memory}")
         
         return jsonify({"success": True, "message": f"Container {name} created"})
@@ -201,7 +215,6 @@ def api_create_container():
 @app.route('/api/containers/<name>/start', methods=['POST'])
 @login_required
 def api_start_container(name):
-    # -d for daemon mode
     result = run_lxc_command(f"{get_lxc_path('start')} -d -n {name}")
     if result["success"]:
         return jsonify({"success": True, "message": f"Container {name} started"})
@@ -243,9 +256,7 @@ def api_unfreeze_container(name):
 @login_required
 def api_delete_container(name):
     force = request.args.get('force', 'false') == 'true'
-    cmd = f"{get_lxc_path('destroy')} -n {name}"
-    if force:
-        cmd = f"{get_lxc_path('destroy')} -f -n {name}"
+    cmd = f"{get_lxc_path('destroy')} -f -n {name}"
     result = run_lxc_command(cmd)
     if result["success"]:
         return jsonify({"success": True, "message": f"Container {name} deleted"})
@@ -263,7 +274,7 @@ def api_container_info(name):
 @login_required
 def api_container_console(name):
     """Check if container is running for console access"""
-    result = run_lxc_command(f"{get_lxc_path('info')} -s -n {name}")
+    result = run_lxc_command(f"{get_lxc_path('info')} -n {name}")
     if result["success"] and "RUNNING" in result["output"]:
         return jsonify({"success": True, "message": "Console access available"})
     return jsonify({"error": "Container not running"}), 500
@@ -277,7 +288,6 @@ def api_execute_command(name):
     if not command:
         return jsonify({"error": "Command required"}), 400
     
-    # Use lxc-execute with -- option
     result = run_lxc_command(f"{get_lxc_path('execute')} -n {name} -- {command}")
     return jsonify(result)
 
@@ -287,27 +297,21 @@ def api_system_info():
     """Get host system information"""
     info = {}
     
-    # Get hostname
     result = run_lxc_command("hostname")
     info['hostname'] = result['output'].strip() if result['success'] else 'Unknown'
     
-    # Get uptime
     result = run_lxc_command("uptime -p")
     info['uptime'] = result['output'].strip() if result['success'] else 'Unknown'
     
-    # Get memory info
     result = run_lxc_command("free -h")
-    info['memory'] = result['output'].strip() if result['success'] else 'Unknown'
+    info['memory'] = result['output'].strip().split('\n')[1] if result['success'] else 'Unknown'
     
-    # Get disk info
     result = run_lxc_command("df -h /")
-    info['disk'] = result['output'].strip() if result['success'] else 'Unknown'
+    info['disk'] = result['output'].strip().split('\n')[1] if result['success'] else 'Unknown'
     
-    # Get CPU info
     result = run_lxc_command("nproc")
     info['cpu_cores'] = result['output'].strip() if result['success'] else 'Unknown'
     
-    # Get LXC version
     result = run_lxc_command(f"{get_lxc_path('ls')} --version")
     info['lxc_version'] = result['output'].strip() if result['success'] else 'Unknown'
     
@@ -316,8 +320,7 @@ def api_system_info():
 @app.route('/api/images', methods=['GET'])
 @login_required
 def api_get_images():
-    """Get available LXC images from images.linuxcontainers.org"""
-    # Return predefined list of popular images
+    """Get available LXC images"""
     images = [
         {"aliases": [{"name": "ubuntu:22.04"}], "properties": {"description": "Ubuntu 22.04 LTS Jammy", "architecture": "amd64"}, "size": 77000000},
         {"aliases": [{"name": "ubuntu:20.04"}], "properties": {"description": "Ubuntu 20.04 LTS Focal", "architecture": "amd64"}, "size": 72000000},
