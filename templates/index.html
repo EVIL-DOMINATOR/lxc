@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LXC Web Panel - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --sidebar-width: 260px;
+        }
+        
+        body {
+            background: #f5f7fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, #2d3748 0%, #1a202c 100%);
+            padding: 20px;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .sidebar-brand {
+            color: white;
+            font-size: 22px;
+            font-weight: 700;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .sidebar-brand i {
+            margin-right: 10px;
+            color: var(--primary-color);
+        }
+        
+        .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .nav-link {
+            color: rgba(255,255,255,0.7);
+            padding: 12px 15px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            color: white;
+            background: rgba(102, 126, 234, 0.2);
+        }
+        
+        .nav-link i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 30px;
+        }
+        
+        .top-bar {
+            background: white;
+            border-radius: 15px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card i {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-card.primary i { color: var(--primary-color); }
+        .stat-card.success i { color: #48bb78; }
+        .stat-card.warning i { color: #ed8936; }
+        .stat-card.danger i { color: #f56565; }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2d3748;
+        }
+        
+        .stat-label {
+            color: #718096;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .container-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .card-body {
+            padding: 0;
+        }
+        
+        .table {
+            margin: 0;
+        }
+        
+        .table thead th {
+            background: #f7fafc;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 15px 20px;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .table tbody td {
+            padding: 15px 20px;
+            vertical-align: middle;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-running {
+            background: #c6f6d5;
+            color: #276749;
+        }
+        
+        .status-stopped {
+            background: #fed7d7;
+            color: #9b2c2c;
+        }
+        
+        .status-frozen {
+            background: #feebc8;
+            color: #9c4221;
+        }
+        
+        .btn-action {
+            padding: 6px 12px;
+            font-size: 13px;
+            margin-right: 5px;
+        }
+        
+        .btn-create {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 25px;
+            font-weight: 600;
+        }
+        
+        .btn-create:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+        
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+        }
+        
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            padding: 12px 15px;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .console-container {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+        }
+        
+        .console-output {
+            color: #4ade80;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        
+        .system-info-card {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .logout-btn {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            padding: 10px 15px;
+            display: block;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(245, 101, 101, 0.2);
+            color: #f56565;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spinner 0.8s linear infinite;
+        }
+        
+        @keyframes spinner {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-boxes"></i> LXC Web Panel
+        </div>
+        
+        <nav class="nav flex-column">
+            <a class="nav-link active" href="#" onclick="showSection('dashboard')">
+                <i class="bi bi-speedometer2"></i> Dashboard
+            </a>
+            <a class="nav-link" href="#" onclick="showSection('containers')">
+                <i class="bi bi-box"></i> Containers
+            </a>
+            <a class="nav-link" href="#" onclick="showSection('images')">
+                <i class="bi bi-hdd-stack"></i> Images
+            </a>
+            <a class="nav-link" href="#" onclick="showSection('system')">
+                <i class="bi bi-pc-display"></i> System
+            </a>
+        </nav>
+        
+        <div style="margin-top: auto; padding-top: 20px;">
+            <a href="/logout" class="logout-btn">
+                <i class="bi bi-box-arrow-left"></i> Logout
+            </a>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div>
+                <h4 style="margin: 0; color: #2d3748;">Welcome, {{ session.get('username', 'Admin') }}</h4>
+                <small class="text-muted">Manage your LXC containers</small>
+            </div>
+            <div>
+                <button class="btn btn-create" data-bs-toggle="modal" data-bs-target="#createContainerModal">
+                    <i class="bi bi-plus-circle"></i> Create Container
+                </button>
+                <button class="btn btn-outline-secondary ms-2" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Dashboard Section -->
+        <div id="dashboard-section">
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="stat-card primary">
+                        <i class="bi bi-box"></i>
+                        <div class="stat-value" id="total-containers">0</div>
+                        <div class="stat-label">Total Containers</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card success">
+                        <i class="bi bi-check-circle"></i>
+                        <div class="stat-value" id="running-containers">0</div>
+                        <div class="stat-label">Running</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card warning">
+                        <i class="bi bi-pause-circle"></i>
+                        <div class="stat-value" id="frozen-containers">0</div>
+                        <div class="stat-label">Frozen</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card danger">
+                        <i class="bi bi-x-circle"></i>
+                        <div class="stat-value" id="stopped-containers">0</div>
+                        <div class="stat-label">Stopped</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="system-info-card" id="system-info">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong><i class="bi bi-cpu"></i> CPU</strong>
+                        <div id="info-cpu">Loading...</div>
+                    </div>
+                    <div class="col-md-3">
+                        <strong><i class="bi bi-memory"></i> Memory</strong>
+                        <div id="info-memory">Loading...</div>
+                    </div>
+                    <div class="col-md-3">
+                        <strong><i class="bi bi-hdd"></i> Disk</strong>
+                        <div id="info-disk">Loading...</div>
+                    </div>
+                    <div class="col-md-3">
+                        <strong><i class="bi bi-clock"></i> Uptime</strong>
+                        <div id="info-uptime">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Containers Section -->
+        <div id="containers-section" style="display: none;">
+            <div class="container-card">
+                <div class="card-header">
+                    <h5><i class="bi bi-box"></i> All Containers</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Image</th>
+                                <th>IPv4</th>
+                                <th>CPU</th>
+                                <th>Memory</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="containers-table">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Loading containers...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Images Section -->
+        <div id="images-section" style="display: none;">
+            <div class="container-card">
+                <div class="card-header">
+                    <h5><i class="bi bi-hdd-stack"></i> Available Images</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Alias</th>
+                                <th>Description</th>
+                                <th>Architecture</th>
+                                <th>Size</th>
+                            </tr>
+                        </thead>
+                        <tbody id="images-table">
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">Loading images...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System Section -->
+        <div id="system-section" style="display: none;">
+            <div class="container-card">
+                <div class="card-header">
+                    <h5><i class="bi bi-terminal"></i> Container Console</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <select class="form-select" id="console-container">
+                                <option value="">Select Container</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-primary" onclick="openConsole()">
+                                <i class="bi bi-terminal"></i> Open Console
+                            </button>
+                        </div>
+                    </div>
+                    <div class="console-container">
+                        <div class="console-output" id="console-output">Select a container and click "Open Console" to start...</div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="command-input" placeholder="Enter command to execute...">
+                            <button class="btn btn-success" onclick="executeCommand()">
+                                <i class="bi bi-play"></i> Execute
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Container Modal -->
+    <div class="modal fade" id="createContainerModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Create New Container</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-form">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Container Name</label>
+                                <input type="text" class="form-control" name="name" required placeholder="my-container">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Image</label>
+                                <select class="form-select" name="image">
+                                    <option value="ubuntu:22.04">Ubuntu 22.04 LTS</option>
+                                    <option value="ubuntu:20.04">Ubuntu 20.04 LTS</option>
+                                    <option value="debian:11">Debian 11</option>
+                                    <option value="debian:12">Debian 12</option>
+                                    <option value="centos:7">CentOS 7</option>
+                                    <option value="almalinux:9">AlmaLinux 9</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">CPU Cores</label>
+                                <input type="number" class="form-control" name="cpu" value="2" min="1">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Memory</label>
+                                <select class="form-select" name="memory">
+                                    <option value="512MB">512 MB</option>
+                                    <option value="1GB" selected>1 GB</option>
+                                    <option value="2GB">2 GB</option>
+                                    <option value="4GB">4 GB</option>
+                                    <option value="8GB">8 GB</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Disk Size</label>
+                                <select class="form-select" name="disk">
+                                    <option value="5GB">5 GB</option>
+                                    <option value="10GB" selected>10 GB</option>
+                                    <option value="20GB">20 GB</option>
+                                    <option value="50GB">50 GB</option>
+                                    <option value="100GB">100 GB</option>
+                                </select>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createContainer()">
+                        <i class="bi bi-plus-circle"></i> Create Container
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Container Actions Modal -->
+    <div class="modal fade" id="containerActionsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="actions-modal-title">Container Actions</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="container-info-body">
+                    Loading...
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    
+    <script>
+        let containersData = [];
+        let terminal = null;
+        
+        // Navigation
+        function showSection(section) {
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('dashboard-section').style.display = 'none';
+            document.getElementById('containers-section').style.display = 'none';
+            document.getElementById('images-section').style.display = 'none';
+            document.getElementById('system-section').style.display = 'none';
+            
+            document.getElementById(section + '-section').style.display = 'block';
+            
+            if (section === 'containers') loadContainers();
+            if (section === 'images') loadImages();
+            if (section === 'system') updateConsoleContainers();
+        }
+        
+        // Load containers
+        async function loadContainers() {
+            try {
+                const response = await fetch('/api/containers');
+                containersData = await response.json();
+                
+                const tbody = document.getElementById('containers-table');
+                
+                if (containersData.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No containers found</td></tr>';
+                    updateStats();
+                    return;
+                }
+                
+                tbody.innerHTML = containersData.map(c => {
+                    const statusClass = c.status === 'Running' ? 'status-running' : 
+                                       c.status === 'Frozen' ? 'status-frozen' : 'status-stopped';
+                    const ipv4 = c.network && c.network.eth0 ? 
+                                (c.network.eth0.addresses && c.network.eth0.addresses.length > 0 ? 
+                                 c.network.eth0.addresses[0].address : 'N/A') : 'N/A';
+                    
+                    return `
+                        <tr>
+                            <td><strong>${c.name}</strong></td>
+                            <td><span class="status-badge ${statusClass}">${c.status}</span></td>
+                            <td>${c.image ? c.image.split('/').pop() : 'N/A'}</td>
+                            <td>${ipv4}</td>
+                            <td>${c.config && c.config['limits.cpu'] ? c.config['limits.cpu'] : 'Unlimited'}</td>
+                            <td>${c.config && c.config['limits.memory'] ? c.config['limits.memory'] : 'Unlimited'}</td>
+                            <td>
+                                ${c.status === 'Stopped' ? 
+                                    `<button class="btn btn-sm btn-success btn-action" onclick="containerAction('${c.name}', 'start')"><i class="bi bi-play"></i></button>` :
+                                    `<button class="btn btn-sm btn-warning btn-action" onclick="containerAction('${c.name}', 'stop')"><i class="bi bi-stop"></i></button>`
+                                }
+                                <button class="btn btn-sm btn-info btn-action" onclick="containerAction('${c.name}', 'restart')"><i class="bi bi-arrow-clockwise"></i></button>
+                                ${c.status === 'Running' ? 
+                                    `<button class="btn btn-sm btn-secondary btn-action" onclick="containerAction('${c.name}', 'freeze')"><i class="bi bi-pause"></i></button>` :
+                                    `<button class="btn btn-sm btn-secondary btn-action" onclick="containerAction('${c.name}', 'unfreeze')"><i class="bi bi-play"></i></button>`
+                                }
+                                <button class="btn btn-sm btn-danger btn-action" onclick="deleteContainer('${c.name}')"><i class="bi bi-trash"></i></button>
+                                <button class="btn btn-sm btn-primary btn-action" onclick="showContainerInfo('${c.name}')"><i class="bi bi-info-circle"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                updateStats();
+                updateConsoleContainers();
+            } catch (error) {
+                console.error('Error loading containers:', error);
+            }
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const total = containersData.length;
+            const running = containersData.filter(c => c.status === 'Running').length;
+            const frozen = containersData.filter(c => c.status === 'Frozen').length;
+            const stopped = containersData.filter(c => c.status === 'Stopped').length;
+            
+            document.getElementById('total-containers').textContent = total;
+            document.getElementById('running-containers').textContent = running;
+            document.getElementById('frozen-containers').textContent = frozen;
+            document.getElementById('stopped-containers').textContent = stopped;
+        }
+        
+        // Load system info
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/api/system/info');
+                const info = await response.json();
+                
+                document.getElementById('info-cpu').textContent = `${info.cpu_cores || 'N/A'} Cores`;
+                document.getElementById('info-memory').textContent = info.memory ? info.memory.split('\n')[1] : 'N/A';
+                document.getElementById('info-disk').textContent = info.disk ? info.disk.split('\n')[1] : 'N/A';
+                document.getElementById('info-uptime').textContent = info.uptime || 'N/A';
+            } catch (error) {
+                console.error('Error loading system info:', error);
+            }
+        }
+        
+        // Load images
+        async function loadImages() {
+            try {
+                const response = await fetch('/api/images');
+                const images = await response.json();
+                
+                const tbody = document.getElementById('images-table');
+                
+                if (images.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No images found</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = images.map(img => `
+                    <tr>
+                        <td>${img.aliases && img.aliases.length > 0 ? img.aliases.map(a => a.name).join(', ') : 'N/A'}</td>
+                        <td>${img.properties && img.properties.description ? img.properties.description : 'N/A'}</td>
+                        <td>${img.properties && img.properties.architecture ? img.properties.architecture : 'N/A'}</td>
+                        <td>${(img.size / 1024 / 1024).toFixed(2)} MB</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading images:', error);
+            }
+        }
+        
+        // Create container
+        async function createContainer() {
+            const form = document.getElementById('create-form');
+            const formData = new FormData(form);
+            
+            const data = {
+                name: formData.get('name'),
+                image: formData.get('image'),
+                cpu: formData.get('cpu'),
+                memory: formData.get('memory'),
+                disk: formData.get('disk')
+            };
+            
+            try {
+                const response = await fetch('/api/containers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Container created successfully!');
+                    bootstrap.Modal.getInstance(document.getElementById('createContainerModal')).hide();
+                    form.reset();
+                    loadContainers();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error creating container: ' + error);
+            }
+        }
+        
+        // Container action
+        async function containerAction(name, action) {
+            try {
+                const response = await fetch(`/api/containers/${name}/${action}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    loadContainers();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error performing action: ' + error);
+            }
+        }
+        
+        // Delete container
+        async function deleteContainer(name) {
+            if (!confirm(`Are you sure you want to delete container "${name}"?`)) return;
+            
+            try {
+                const response = await fetch(`/api/containers/${name}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    loadContainers();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error deleting container: ' + error);
+            }
+        }
+        
+        // Show container info
+        async function showContainerInfo(name) {
+            try {
+                const response = await fetch(`/api/containers/${name}/info`);
+                const info = await response.json();
+                
+                document.getElementById('actions-modal-title').textContent = `Container: ${name}`;
+                document.getElementById('container-info-body').innerHTML = `
+                    <pre>${JSON.stringify(info, null, 2)}</pre>
+                `;
+                
+                new bootstrap.Modal(document.getElementById('containerActionsModal')).show();
+            } catch (error) {
+                alert('Error loading container info: ' + error);
+            }
+        }
+        
+        // Update console containers dropdown
+        function updateConsoleContainers() {
+            const select = document.getElementById('console-container');
+            select.innerHTML = '<option value="">Select Container</option>' + 
+                containersData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+        }
+        
+        // Open console
+        async function openConsole() {
+            const containerName = document.getElementById('console-container').value;
+            if (!containerName) {
+                alert('Please select a container');
+                return;
+            }
+            
+            const output = document.getElementById('console-output');
+            output.innerHTML = `Connecting to ${containerName}...\n`;
+            
+            try {
+                const response = await fetch(`/api/containers/${containerName}/console`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    output.innerHTML += `Connected to ${containerName}!\nReady for commands.\n`;
+                } else {
+                    output.innerHTML += `Error: ${result.error}\n`;
+                }
+            } catch (error) {
+                output.innerHTML += `Error: ${error}\n`;
+            }
+        }
+        
+        // Execute command
+        async function executeCommand() {
+            const containerName = document.getElementById('console-container').value;
+            const command = document.getElementById('command-input').value;
+            
+            if (!containerName) {
+                alert('Please select a container');
+                return;
+            }
+            
+            if (!command) {
+                alert('Please enter a command');
+                return;
+            }
+            
+            const output = document.getElementById('console-output');
+            output.innerHTML += `\n$ ${command}\n`;
+            
+            try {
+                const response = await fetch(`/api/containers/${containerName}/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    output.innerHTML += result.output + '\n';
+                } else {
+                    output.innerHTML += `Error: ${result.error}\n`;
+                }
+                
+                output.scrollTop = output.scrollHeight;
+                document.getElementById('command-input').value = '';
+            } catch (error) {
+                output.innerHTML += `Error: ${error}\n`;
+            }
+        }
+        
+        // Refresh data
+        function refreshData() {
+            loadContainers();
+            loadSystemInfo();
+            loadImages();
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadContainers();
+            loadSystemInfo();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(refreshData, 30000);
+        });
+    </script>
+</body>
+</html>
